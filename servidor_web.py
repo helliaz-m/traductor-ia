@@ -46,17 +46,9 @@ def traducir_frame(data):
             if nueva_traduccion != ultima_traduccion:
                 ultima_traduccion = nueva_traduccion
                 emit("respuesta_traduccion", {"traduccion": nueva_traduccion})
-                
     except Exception as e:
-        pass
+        print(f"Error procesando frame: {e}", flush=True)
 
 if __name__ == "__main__":
-    # Lee automáticamente el puerto que Render asigna
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host="0.0.0.0", port=port)
-    except Exception as e:
-        pass
-
-if __name__ == "__main__":
-    # host="0.0.0.0" permite que celulares en la misma red se conecten
-    socketio.run(app, host="0.0.0.0", port=5000)
