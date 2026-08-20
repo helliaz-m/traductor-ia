@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traductor IA</title>
+    <title>Traductor IA - Lenguaje de Señas</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #1e272e; color: white; text-align: center; margin: 0; padding: 15px; }
         h1 { color: #00d2d3; margin-bottom: 10px; font-size: 22px; }
@@ -79,7 +79,7 @@
             }
         });
 
-        // 🚀 OPTIMIZACIÓN: modelComplexity: 0 (Ultra ligero para celulares)
+        // 🚀 OPTIMIZACIÓN: modelComplexity: 0 (Carga ultrarrápida)
         const holistic = new Holistic({locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
         }});
@@ -126,7 +126,8 @@
             let landmarks_mano = resultados.rightHandLandmarks || resultados.leftHandLandmarks;
 
             if (landmarks_mano) { 
-                landmarks_mano.forEach(p => mano_activa.push(Math.abs(p.x - nariz_x), p.y - nariz_y)); 
+                // 💡 CORRECCIÓN: Se quitó Math.abs() para mantener las posiciones exactas del entrenamiento
+                landmarks_mano.forEach(p => mano_activa.push(p.x - nariz_x, p.y - nariz_y)); 
             } else { 
                 mano_activa = new Array(42).fill(0.0); 
             }
@@ -134,7 +135,7 @@
             canvasCtx.restore();
 
             const ahora = Date.now();
-            // ⏱️ CONTROL DE FRECUENCIA: Máximo 1 envío cada 200ms
+            // ⏱️ CONTROL DE FRECUENCIA: 1 envío cada 200ms
             if (landmarks_mano && !servidorOcupado && socket.connected && (ahora - ultimoTiempoEnvio > 200)) {
                 servidorOcupado = true; 
                 ultimoTiempoEnvio = ahora;
