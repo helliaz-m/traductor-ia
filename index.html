@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traductor IA</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #1e272e; color: white; text-align: center; margin: 0; padding: 20px; }
+        h1 { color: #00d2d3; margin-bottom: 10px; font-size: 24px; }
+        .contenedor { position: relative; display: inline-block; margin-top: 10px; width: 100%; max-width: 640px; }
+        canvas { width: 100%; border: 4px solid #00d2d3; border-radius: 12px; transform: scaleX(-1); background-color: #2f3640; box-shadow: 0 8px 16px rgba(0,0,0,0.4); } 
+        #pantalla_carga { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(30, 39, 46, 0.9); padding: 15px; border-radius: 10px; font-weight: bold; color: #fbc531; z-index: 10; }
+        #caja_traduccion { margin-top: 20px; background-color: #2f3640; display: inline-block; padding: 15px 30px; border-radius: 10px; border-left: 6px solid #fbc531; width: 80%; max-width: 400px; }
+        #traduccion { font-size: 28px; font-weight: bold; color: #00ffaa; }
+    </style>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+
+    <h1>Traductor IA - Lenguaje de Señas</h1>
+    
+    <div class="contenedor">
+        <div id="pantalla_carga">⏳ Cargando IA...</div>
+        <video id="video_camara" style="display: none;" autoplay playsinline></video>
+        <canvas id="lienzo" width="640" height="480"></canvas>
+    </div>
+
+    <br>
+    <div id="caja_traduccion">
+        <div id="traduccion">Esperando señas...</div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('video_camara');
+        const canvasElement = document.getElementById('lienzo');
+        const canvasCtx = canvasElement.getContext('2d');
+        const divTraduccion = document.getElementById('traduccion');
+        const pantallaCarga = document.getElementById('pantalla_carga');
+        
+        // 🌟 NUEVO: Conexión inteligente (funciona en PC y Celular sin cambiar código)
+        const socket = io();
+        let servidorOcupado = false; 
+        let ultimaPalabraHablada = "";
+
+        function hablar(texto) {
+            if (!texto) { ultimaPalabraHablada = ""; return; }
+            if (texto !== ultimaPalabraHablada) {
+                window.speechSynthesis.cancel();
+                let mensaje = new SpeechSynthesisUtterance(texto);
+                mensaje.lang = "es-ES";
+                window.speechSynthesis.speak(mensaje);
+                ultimaPalabraHablada = texto; 
+            }
+        }
+
+        socket.on("respuesta_traduccion", (datos) => {
+            servidorOcupado = false; 
+            if (datos.traduccion && datos.traduccion !== "") {
+                divTraduccion.innerText = "Traducción: " + datos.traduccion.toUpperCase();
+                hablar(datos.traduccion);
+            } else {
+                // 🌟 NUEVO: Resetea la voz al bajar las manos
+                ultimaPalabraHablada = "";
+            }
+        });
+
+        const holistic = new Holistic({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
+        }});
+
+        holistic.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+
+        holistic.onResults((resultados) => {
+            if (pantallaCarga.style.display !== "none") { pantallaCarga.style.display = "none"; }
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(resultados.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (resultados.leftHandLandmarks) { drawConnectors(canvasCtx, resultados.leftHandLandmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2}); drawLandmarks(canvasCtx, resultados.leftHandLandmarks, {color: '#FF0000', lineWidth: 1, radius: 3}); }
+            if (resultados.rightHandLandmarks) { drawConnectors(canvasCtx, resultados.rightHandLandmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2}); drawLandmarks(canvasCtx, resultados.rightHandLandmarks, {color: '#FF0000', lineWidth: 1, radius: 3}); }
+
+            let nariz_x = 0.5, nariz_y = 0.5;
+            if (resultados.poseLandmarks) { nariz_x = resultados.poseLandmarks[0].x; nariz_y = resultados.poseLandmarks[0].y; }
+
+            let pose = [];
+            if (resultados.poseLandmarks) { resultados.poseLandmarks.forEach(p => pose.push(p.x - nariz_x, p.y - nariz_y)); } 
+            else { pose = new Array(66).fill(0.0); }
+
+            let mano_activa = [];
+            let landmarks_mano = resultados.rightHandLandmarks || resultados.leftHandLandmarks;
+
+            if (landmarks_mano) { landmarks_mano.forEach(p => mano_activa.push(Math.abs(p.x - nariz_x), p.y - nariz_y)); } 
+            else { mano_activa = new Array(42).fill(0.0); }
+
+            canvasCtx.restore();
+
+            if (landmarks_mano && !servidorOcupado && socket.connected) {
+                servidorOcupado = true; 
+                let vector_puntos = pose.concat(mano_activa);
+                socket.emit("traducir_frame", { puntos: vector_puntos });
+            } else if (!landmarks_mano) {
+                divTraduccion.innerText = "Esperando señas...";
+                hablar(""); 
+            }
+        });
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await holistic.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        camera.start();
+    </script>
+</body>
+</html>
