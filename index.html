@@ -6,7 +6,8 @@
     <title>Traductor IA - Lenguaje de Señas</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #1e272e; color: white; text-align: center; margin: 0; padding: 15px; }
-        h1 { color: #00d2d3; margin-bottom: 10px; font-size: 22px; }
+        h1 { color: #00d2d3; margin-bottom: 5px; font-size: 22px; }
+        #estado_socket { font-size: 13px; color: #ffdd59; margin-bottom: 10px; }
         .contenedor { position: relative; display: inline-block; margin-top: 5px; width: 100%; max-width: 640px; }
         canvas { width: 100%; border: 3px solid #00d2d3; border-radius: 12px; transform: scaleX(-1); background-color: #2f3640; box-shadow: 0 6px 12px rgba(0,0,0,0.4); } 
         #pantalla_carga { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(30, 39, 46, 0.95); padding: 20px; border-radius: 12px; font-weight: bold; color: #fbc531; z-index: 10; width: 80%; }
@@ -23,6 +24,7 @@
 <body>
 
     <h1>Traductor IA - Lenguaje de Señas</h1>
+    <div id="estado_socket">Servidor: 🟡 Conectando...</div>
     
     <div class="contenedor">
         <div id="pantalla_carga">
@@ -46,6 +48,7 @@
         const pantallaCarga = document.getElementById('pantalla_carga');
         const textoCarga = document.getElementById('texto_carga');
         const btnIniciar = document.getElementById('btn_iniciar');
+        const divEstadoSocket = document.getElementById('estado_socket');
 
         const socket = io();
         let servidorOcupado = false; 
@@ -53,7 +56,16 @@
         let ultimoTiempoEnvio = 0;
         let camaraIniciada = false;
 
-        // 🔊 Voz optimizada para celulares y laptops
+        socket.on("connect", () => {
+            divEstadoSocket.innerHTML = "Servidor: 🟢 Conectado";
+            divEstadoSocket.style.color = "#00ffaa";
+        });
+
+        socket.on("disconnect", () => {
+            divEstadoSocket.innerHTML = "Servidor: 🔴 Desconectado";
+            divEstadoSocket.style.color = "#ff4d4d";
+        });
+
         function hablar(texto) {
             if (!texto) { 
                 ultimaPalabraHablada = ""; 
@@ -79,7 +91,6 @@
             }
         });
 
-        // 🚀 OPTIMIZACIÓN: modelComplexity: 0 (Carga ultrarrápida)
         const holistic = new Holistic({locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
         }});
@@ -126,7 +137,6 @@
             let landmarks_mano = resultados.rightHandLandmarks || resultados.leftHandLandmarks;
 
             if (landmarks_mano) { 
-                // 💡 CORRECCIÓN: Se quitó Math.abs() para mantener las posiciones exactas del entrenamiento
                 landmarks_mano.forEach(p => mano_activa.push(p.x - nariz_x, p.y - nariz_y)); 
             } else { 
                 mano_activa = new Array(42).fill(0.0); 
@@ -135,7 +145,6 @@
             canvasCtx.restore();
 
             const ahora = Date.now();
-            // ⏱️ CONTROL DE FRECUENCIA: 1 envío cada 200ms
             if (landmarks_mano && !servidorOcupado && socket.connected && (ahora - ultimoTiempoEnvio > 200)) {
                 servidorOcupado = true; 
                 ultimoTiempoEnvio = ahora;
@@ -154,7 +163,6 @@
         });
 
         function iniciarAplicacion() {
-            // Desbloquea el motor de voz en celulares
             let mensajePrueba = new SpeechSynthesisUtterance("");
             window.speechSynthesis.speak(mensajePrueba);
             
